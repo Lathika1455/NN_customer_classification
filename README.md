@@ -14,7 +14,7 @@ You are required to help the manager to predict the right group of the new custo
 
 ## Neural Network Model
 
-<img width="831" height="553" alt="image" src="https://github.com/user-attachments/assets/0a972baf-5988-4c80-99c2-6278ac232e49" />
+<img width="1121" height="994" alt="image" src="https://github.com/user-attachments/assets/5c2e43e4-e265-44e4-887f-c50e2d86a708" />
 
 ## DESIGN STEPS
 
@@ -37,6 +37,53 @@ Evaluate the trained model using test data and use it to predict the customer se
 ### Register Number: 212224040169
 
 ```
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from torch.utils.data import TensorDataset, DataLoader
+
+data = pd.read_csv('customers.csv')
+data.head()
+
+data.columns
+
+data = data.drop(columns=["ID"])
+
+data.fillna({"Work_Experience": 0, "Family_Size": data["Family_Size"].median()}, inplace=True)
+
+categorical_columns = ["Gender", "Ever_Married", "Graduated", "Profession", "Spending_Score", "Var_1"]
+for col in categorical_columns:
+    data[col] = LabelEncoder().fit_transform(data[col])
+
+label_encoder = LabelEncoder()
+data["Segmentation"] = label_encoder.fit_transform(data["Segmentation"])  # A, B, C, D -> 0, 1, 2, 3
+
+X = data.drop(columns=["Segmentation"])
+y = data["Segmentation"].values
+
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+X_train = torch.tensor(X_train, dtype=torch.float32)
+X_test = torch.tensor(X_test, dtype=torch.float32)
+y_train = torch.tensor(y_train, dtype=torch.long)
+y_test = torch.tensor(y_test, dtype=torch.long)
+
+train_dataset = TensorDataset(X_train, y_train)
+test_dataset = TensorDataset(X_test, y_test)
+train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=16)
+
 # Define Neural Network(Model1)
 class PeopleClassifier(nn.Module):
     def __init__(self, input_size):
@@ -45,46 +92,83 @@ class PeopleClassifier(nn.Module):
         self.fc2 = nn.Linear(32, 16)
         self.fc3 = nn.Linear(16, 8)
         self.fc4 = nn.Linear(8, 4)
+
     def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
-        x = self.fc4(x)
-        return x
-```
+      x = F.relu(self.fc1(x))
+      x = F.relu(self.fc2(x))
+      x = F.relu(self.fc3(x))
+      x = self.fc4(x)
+      return x
 
-```
-# Initialize the Model, Loss Function, and Optimizer
-model = PeopleClassifier(input_size=X_train.shape[1])
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(),lr=0.001)
-train_model(model, train_loader, criterion, optimizer, epochs=100)
-```
-
-```
-#function to train the model
+# Training Loop
 def train_model(model, train_loader, criterion, optimizer, epochs):
-    model.train()
-    for epoch in range(epochs):
-        for inputs, labels in train_loader:
-          optimizer.zero_grad()
-          outputs=model(inputs)
-          loss=criterion(outputs, labels)
-          loss.backward()
-          optimizer.step()
-    if (epoch + 1) % 10 == 0:
+  model.train()
+  for epoch in range(epochs):
+    for inputs, labels in train_loader:
+      optimizer.zero_grad()
+      outputs = model(inputs)
+      loss = criterion(outputs, labels)
+      loss.backward()
+      optimizer.step()
+
+  if (epoch + 1) % 10 == 0:
         print(f'Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}')
+
+  # Initialize model
+model = PeopleClassifier(input_size = X_train.shape[1])
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+train_model(model, train_loader, criterion, optimizer, epochs=100)
+
+# Evaluation
+model.eval()
+predictions, actuals = [], []
+with torch.no_grad():
+    for X_batch, y_batch in test_loader:
+        outputs = model(X_batch)
+        _, predicted = torch.max(outputs, 1)
+        predictions.extend(predicted.numpy())
+        actuals.extend(y_batch.numpy())
+
+accuracy = accuracy_score(actuals, predictions)
+conf_matrix = confusion_matrix(actuals, predictions)
+class_report = classification_report(actuals, predictions, target_names=[str(i) for i in label_encoder.classes_])
+print("Name: LATHIKA SREE R")
+print("Register No: 212224040169")
+print(f'Test Accuracy: {accuracy:.2f}%')
+print("Confusion Matrix:\n", conf_matrix)
+print("Classification Report:\n", class_report)
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+sns.heatmap(conf_matrix, annot=True, cmap='Blues', xticklabels=label_encoder.classes_, yticklabels=label_encoder.classes_,fmt='g')
+plt.xlabel("Predicted Labels")
+plt.ylabel("True Labels")
+plt.title("Confusion Matrix")
+plt.show()
+
+sample_input = X_test[12].clone().unsqueeze(0).detach().type(torch.float32)
+with torch.no_grad():
+    output = model(sample_input)
+    # Select the prediction for the sample (first element)
+    predicted_class_index = torch.argmax(output[0]).item()
+    predicted_class_label = label_encoder.inverse_transform([predicted_class_index])[0]
+print("Name: LATHIKA SREE R ")
+print("Register No: 212224040169")
+print(f'Predicted class for sample input: {predicted_class_label}')
+print(f'Actual class for sample input: {label_encoder.inverse_transform([y_test[12].item()])[0]}')
+
+
 ```
 
 
 
 ## Dataset Information
 
-<img width="1229" height="229" alt="image" src="https://github.com/user-attachments/assets/cbc5dfa8-6fa3-4314-8730-3477bcc2e356" />
+<img width="1243" height="164" alt="image" src="https://github.com/user-attachments/assets/28cd0108-8b27-413c-b14f-57def27d7326" />
 
 ## OUTPUT
-
-
 
 ### Confusion Matrix
 
@@ -95,12 +179,12 @@ def train_model(model, train_loader, criterion, optimizer, epochs):
 ### Classification Report
 
 
-<img width="565" height="324" alt="image" src="https://github.com/user-attachments/assets/8b64f882-7a8e-4f6d-a507-661dd1c3f2fd" />
+<img width="676" height="450" alt="image" src="https://github.com/user-attachments/assets/4637035c-1ffb-4364-9a89-806a37e9a2c4" />
 
 
 ### New Sample Data Prediction
 
-<img width="375" height="65" alt="image" src="https://github.com/user-attachments/assets/cb60f1bb-3679-4fef-8d17-76627ce5feec" />
+<img width="437" height="94" alt="image" src="https://github.com/user-attachments/assets/59d2ffb8-abad-47ec-a535-fa799657d551" />
 
 
 ## RESULT
